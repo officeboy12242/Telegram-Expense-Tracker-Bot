@@ -228,9 +228,8 @@ _✨ Start tracking now and take control of your money!_
             const msg = `✅ Recorded shared expense for *${escapeMarkdown(description)}*:\n• Paid by *${escapeMarkdown(payer)}*\n${entries.join('\n')}`;
             await bot.editMessageText(msg, { chat_id: chatId, message_id: query.message.message_id, parse_mode: 'Markdown' });
           }
-        } else if (action === 'settle_now') {
+        } else if (query.data === 'settle_now') {
           await showBalances(chatId, query.from.id);
-          await bot.deleteMessage(chatId, query.message.message_id); // 🔥 delete old message
         } else if (query.data === 'clear_all') {
           await db.collection('shared_expenses').deleteMany({ user_id: query.from.id });
           await bot.editMessageText('✅ All your shared expenses cleared.', { chat_id: chatId, message_id: query.message.message_id });
@@ -240,20 +239,6 @@ _✨ Start tracking now and take control of your money!_
         } else if (query.data === 'close') {
           await bot.deleteMessage(chatId, query.message.message_id);
         }
-        else if (query.data.startsWith('clear_person|')) {
-          const person = query.data.split('|')[1];
-          const result = await db.collection('shared_expenses').deleteMany({
-            user_id: query.from.id,
-            $or: [{ payer: person }, { payee: person }]
-          });
-
-          await bot.editMessageText(`✅ Cleared all shared entries with *${escapeMarkdown(person)}*.`, {
-            chat_id: chatId,
-            message_id: query.message.message_id,
-            parse_mode: 'Markdown'
-          });
-        }
-
       } catch (err) {
         console.error('Error handling callback query:', err);
         await bot.answerCallbackQuery(query.id, { text: '❌ An error occurred while processing your request.' });
@@ -378,26 +363,22 @@ _✨ Start tracking now and take control of your money!_
       });
 
       const lines = ['*💰 Balance Summary:*'];
-      const inlineButtons = [];
       for (const [person, bal] of Object.entries(balances)) {
-        const rounded = Math.round(bal * 100) / 100;
-        if (rounded !== 0) {
-          lines.push(`*${escapeMarkdown(person)}*: ${rounded > 0 ? 'gets' : 'owes'} ₹${Math.abs(rounded).toFixed(2)}`);
-          inlineButtons.push([{ text: `🧹 Clear for ${person}`, callback_data: `clear_person|${person}` }]);
-        }
+        lines.push(`*${escapeMarkdown(person)}*: ${bal > 0 ? 'gets' : 'owes'} ₹${Math.abs(bal).toFixed(2)}`);
       }
 
-      inlineButtons.push([
-        { text: '🧹 Clear All', callback_data: 'clear_all' },
-        { text: '↩️ Back', callback_data: 'show_shared' },
-        { text: '❌ Close', callback_data: 'close' }
-      ]);
-
-      const keyboard = { inline_keyboard: inlineButtons };
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '🧹 Clear All', callback_data: 'clear_all' },
+            { text: '↩️ Back', callback_data: 'show_shared' },
+            { text: '❌ Close', callback_data: 'close' }
+          ]
+        ]
+      };
 
       await bot.sendMessage(chatId, lines.join('\n'), { parse_mode: 'Markdown', reply_markup: keyboard });
     }
-
 
     bot.onText(/\/help/, (msg) => {
       const chatId = msg.chat.id;
